@@ -1,22 +1,30 @@
-FROM python:3.12-slim
+FROM python:3.12.16-slim-bookworm
 
-# No generar .pyc y mostrar logs al instante
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV BACKEND_ID=backend-local
 
 WORKDIR /app
 
-# Primero las dependencias: aprovecha la cache de capas de Docker
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 
-# Usuario sin privilegios
-RUN useradd --create-home appuser
-USER appuser
+USER 10001:10001
 
-EXPOSE 5000
+EXPOSE 8000
 
-# 1 worker + 4 hilos: las metricas en memoria quedan consistentes
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "app:app"]
+HEALTHCHECK --interval=20s --timeout=3s \
+    --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+
+CMD ["gunicorn", \
+     "--workers", "1", \
+     "--threads", "4", \
+     "--worker-class", "gthread", \
+     "--bind", "0.0.0.0:8000", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "app:app"]

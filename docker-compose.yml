@@ -1,131 +1,206 @@
-name: proyecto-final-uao
-
-x-backend: &backend
-  image: backend-uao:1.0
-  restart: unless-stopped
-  networks:
-    - monitoring-net
-  healthcheck:
-    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
-    interval: 10s
-    timeout: 3s
-    retries: 5
-    start_period: 5s
+name: proyecto-final-devops
 
 services:
-  backend1:
-    <<: *backend
-    build: ./backend
-    container_name: backend1
-    environment:
-      INSTANCE_ID: "1"
 
-  backend2:
-    <<: *backend
-    container_name: backend2
-    depends_on:
-      - backend1
+  # ==========================================
+  # BACKEND PYTHON - INSTANCIA 1
+  # ==========================================
+  backend-1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: proyecto-final-backend:1.0
     environment:
-      INSTANCE_ID: "2"
-
-  backend3:
-    <<: *backend
-    container_name: backend3
-    depends_on:
-      - backend1
-    environment:
-      INSTANCE_ID: "3"
-
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: nginx
+      BACKEND_ID: backend-1
+    expose:
+      - "8000"
+    networks:
+      - devops-lab-net
     restart: unless-stopped
+
+  # ==========================================
+  # BACKEND PYTHON - INSTANCIA 2
+  # ==========================================
+  backend-2:
+    image: proyecto-final-backend:1.0
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_ID: backend-2
+    expose:
+      - "8000"
+    networks:
+      - devops-lab-net
+    restart: unless-stopped
+
+  # ==========================================
+  # BACKEND PYTHON - INSTANCIA 3
+  # ==========================================
+  backend-3:
+    image: proyecto-final-backend:1.0
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_ID: backend-3
+    expose:
+      - "8000"
+    networks:
+      - devops-lab-net
+    restart: unless-stopped
+
+  # ==========================================
+  # NGINX - PROXY INVERSO
+  # ==========================================
+  nginx:
+    image: nginx:1.30.7-alpine3.24
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      backend1:
+      backend-1:
         condition: service_healthy
-      backend2:
+      backend-2:
         condition: service_healthy
-      backend3:
+      backend-3:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
-      - monitoring-net
+      - devops-lab-net
+    restart: unless-stopped
 
+  # ==========================================
+  # NGINX PROMETHEUS EXPORTER
+  # ==========================================
   nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.3.0
-    container_name: nginx-exporter
-    restart: unless-stopped
+    image: nginx/nginx-prometheus-exporter:1.5.3
     command:
-      - "--nginx.scrape-uri=http://nginx:8888/stub_status"
+      - "--nginx.scrape-uri=http://nginx:8081/stub_status"
+    ports:
+      - "127.0.0.1:9113:9113"
     depends_on:
-      - nginx
+      nginx:
+        condition: service_healthy
     networks:
-      - monitoring-net
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: cadvisor
+      - devops-lab-net
     restart: unless-stopped
+
+  # ==========================================
+  # CADVISOR - RECURSOS DE CONTENEDORES
+  # ==========================================
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.61.1
     privileged: true
     ports:
-      - "8081:8080"
-    devices:
-      - /dev/kmsg
+      - "127.0.0.1:8082:8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+      - /var/lib/docker:/var/lib/docker:ro
     networks:
-      - monitoring-net
-
-  prometheus:
-    image: prom/prometheus:v2.53.0
-    container_name: prometheus
+      - devops-lab-net
     restart: unless-stopped
+
+  # ==========================================
+  # DOCKER STATS EXPORTER
+  # ==========================================
+  docker-stats-exporter:
+    build:
+      context: ./docker-stats-exporter
+      dockerfile: Dockerfile
+    image: proyecto-final-docker-stats-exporter:1.0
+    environment:
+      COMPOSE_PROJECT: proyecto-final-devops
+    ports:
+      - "127.0.0.1:9274:9274"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - devops-lab-net
+    restart: unless-stopped
+
+  # ==========================================
+  # PROMETHEUS - RECOLECCION DE METRICAS
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:v3.15.0
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=7d"
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
+      - prometheus_data:/prometheus
     depends_on:
-      - nginx-exporter
-      - cadvisor
+      backend-1:
+        condition: service_healthy
+      backend-2:
+        condition: service_healthy
+      backend-3:
+        condition: service_healthy
+      nginx-exporter:
+        condition: service_started
+      cadvisor:
+        condition: service_started
+      docker-stats-exporter:
+        condition: service_healthy
     networks:
-      - monitoring-net
-
-  grafana:
-    image: grafana/grafana:11.1.0
-    container_name: grafana
+      - devops-lab-net
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+
+  # ==========================================
+  # GRAFANA - VISUALIZACION
+  # ==========================================
+  grafana:
+    image: grafana/grafana:12.4.15
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Editor"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
     volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_started
     networks:
-      - monitoring-net
+      - devops-lab-net
+    restart: unless-stopped
 
+# ==========================================
+# RED PERSONALIZADA
+# ==========================================
 networks:
-  monitoring-net:
+  devops-lab-net:
     driver: bridge
-    name: monitoring-net
 
+# ==========================================
+# VOLUMENES PERSISTENTES
+# ==========================================
 volumes:
-  prometheus-data:
-  grafana-data:
+  prometheus_data:
+  grafana_data:
