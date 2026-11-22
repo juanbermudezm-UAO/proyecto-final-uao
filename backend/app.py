@@ -1,8 +1,7 @@
 import os
-import socket
 import time
 
-from flask import Flask, Response, g, jsonify, request
+from flask import Flask, Response, jsonify, g, request
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -12,22 +11,34 @@ from prometheus_client import (
 
 app = Flask(__name__)
 
-INSTANCE_ID = os.getenv("INSTANCE_ID", "desconocida")
-HOSTNAME = socket.gethostname()
+INSTANCE_ID = os.getenv("BACKEND_ID", "backend-local")
 
-# Contador de solicitudes: permite calcular req/s con rate()
-REQUEST_COUNT = Counter(
-    "http_requests_total",
-    "Total de solicitudes HTTP recibidas por el backend",
-    ["instance_id", "method", "endpoint", "status"],
+# Contador de solicitudes HTTP.
+HTTP_REQUESTS = Counter(
+    "backend_http_requests",
+    "Total de solicitudes HTTP recibidas",
+    ["instance_id", "method", "endpoint", "status_code"],
 )
 
-# Histograma de latencia: permite calcular p50/p95/p99 con histogram_quantile()
-REQUEST_LATENCY = Histogram(
-    "http_request_duration_seconds",
-    "Latencia de las solicitudes HTTP en segundos",
+# Histograma de duracion de solicitudes.
+HTTP_LATENCY = Histogram(
+    "backend_http_request_duration_seconds",
+    "Duracion de solicitudes HTTP en segundos",
     ["instance_id", "method", "endpoint"],
-    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    buckets=(
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        1.0,
+        2.5,
+        5.0,
+        10.0,
+        float("inf"),
+    ),
 )
 
 
@@ -38,56 +49,88 @@ def start_timer():
 
 @app.after_request
 def record_metrics(response):
-    # No medimos /metrics para no contaminar las estadisticas
+    response.headers["X-Backend-Instance"] = INSTANCE_ID
+
+    # Evitar contabilizar las consultas de Prometheus.
     if request.path == "/metrics":
         return response
 
-    # Usamos el patron de la ruta (no la URL real) para limitar la cardinalidad
-    endpoint = request.url_rule.rule if request.url_rule else "no_encontrada"
-    elapsed = time.perf_counter() - g.start_time
+    duration = time.perf_counter() - g.start_time
 
-    REQUEST_COUNT.labels(
+    endpoint = (
+        request.url_rule.rule
+        if request.url_rule
+        else "unmatched"
+    )
+
+    HTTP_REQUESTS.labels(
         instance_id=INSTANCE_ID,
         method=request.method,
         endpoint=endpoint,
-        status=response.status_code,
+        status_code=str(response.status_code),
     ).inc()
-    REQUEST_LATENCY.labels(
+
+    HTTP_LATENCY.labels(
         instance_id=INSTANCE_ID,
         method=request.method,
         endpoint=endpoint,
-    ).observe(elapsed)
+    ).observe(duration)
 
-    # Encabezado para ver desde el cliente que instancia respondio
-    response.headers["X-Instance-ID"] = INSTANCE_ID
     return response
 
 
-@app.route("/")
+@app.get("/")
 def index():
-    return jsonify(
-        mensaje="Hola desde el backend",
-        instancia=INSTANCE_ID,
-        contenedor=HOSTNAME,
+    return jsonify({
+        "message": "Proyecto Final - Backend Python",
+        "instance": INSTANCE_ID,
+        "status": "ok",
+    })
+
+
+@app.get("/health")
+def health():
+    return jsonify({
+        "status": "healthy",
+        "instance": INSTANCE_ID,
+    })
+
+
+@app.get("/work")
+def work():
+    try:
+        delay_ms = int(request.args.get("delay_ms", "20"))
+    except ValueError:
+        return jsonify({
+            "error": "delay_ms debe ser un numero entero"
+        }), 400
+
+    if not 0 <= delay_ms <= 200:
+        return jsonify({
+            "error": "delay_ms debe estar entre 0 y 200"
+        }), 400
+
+    time.sleep(delay_ms / 1000)
+
+    return jsonify({
+        "message": "Trabajo simulado completado",
+        "instance": INSTANCE_ID,
+        "delay_ms": delay_ms,
+        "status": "ok",
+    })
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype=CONTENT_TYPE_LATEST,
     )
 
 
-@app.route("/health")
-def health():
-    return jsonify(estado="ok", instancia=INSTANCE_ID)
-
-
-@app.route("/slow")
-def slow():
-    # Simula una operacion lenta (200 ms) para ver cambios en la latencia
-    time.sleep(0.2)
-    return jsonify(mensaje="Respuesta lenta", instancia=INSTANCE_ID)
-
-
-@app.route("/metrics")
-def metrics():
-    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
-
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(
+        host="0.0.0.0",
+        port=8000,
+        debug=False,
+    )
