@@ -1,0 +1,488 @@
+{
+    "uid": "infra-overview",
+    "title": "Infraestructura - Vista general",
+    "tags": [
+        "proyecto-final",
+        "nginx",
+        "backend"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "5s",
+    "time": {
+        "from": "now-15m",
+        "to": "now"
+    },
+    "editable": true,
+    "panels": [
+        {
+            "id": 1,
+            "type": "stat",
+            "title": "Targets UP",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 0
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(up)",
+                    "instant": true
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 6
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "options": {
+                "colorMode": "background",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 2,
+            "type": "stat",
+            "title": "Solicitudes/s (backends)",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 0
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(rate(http_requests_total[1m]))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps",
+                    "decimals": 1
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 3,
+            "type": "stat",
+            "title": "Latencia p95",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 0
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s",
+                    "decimals": 3
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 4,
+            "type": "stat",
+            "title": "Conexiones activas Nginx",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 0
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "nginx_connections_active"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 5,
+            "type": "timeseries",
+            "title": "Latencia global p50 / p95 / p99",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 4
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "p50",
+                    "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))"
+                },
+                {
+                    "refId": "B",
+                    "legendFormat": "p95",
+                    "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))"
+                },
+                {
+                    "refId": "C",
+                    "legendFormat": "p99",
+                    "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 6,
+            "type": "timeseries",
+            "title": "Latencia p95 por instancia",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 4
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "backend {{instance_id}}",
+                    "expr": "histogram_quantile(0.95, sum by (le, instance_id) (rate(http_request_duration_seconds_bucket[1m])))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 7,
+            "type": "timeseries",
+            "title": "Tasa de solicitudes por instancia (req/s)",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 12
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "backend {{instance_id}}",
+                    "expr": "sum by (instance_id) (rate(http_requests_total[1m]))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 8,
+            "type": "timeseries",
+            "title": "Códigos de respuesta (req/s)",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 12
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "HTTP {{status}}",
+                    "expr": "sum by (status) (rate(http_requests_total[1m]))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 9,
+            "type": "timeseries",
+            "title": "Nginx: conexiones",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 20
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "activas",
+                    "expr": "nginx_connections_active"
+                },
+                {
+                    "refId": "B",
+                    "legendFormat": "leyendo",
+                    "expr": "nginx_connections_reading"
+                },
+                {
+                    "refId": "C",
+                    "legendFormat": "escribiendo",
+                    "expr": "nginx_connections_writing"
+                },
+                {
+                    "refId": "D",
+                    "legendFormat": "en espera",
+                    "expr": "nginx_connections_waiting"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 10,
+            "type": "timeseries",
+            "title": "Nginx: solicitudes/s",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 20
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "nginx req/s",
+                    "expr": "rate(nginx_http_requests_total[1m])"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 11,
+            "type": "timeseries",
+            "title": "CPU por contenedor (%)",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 28
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "{{name}}",
+                    "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[1m])) * 100"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percent"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 12,
+            "type": "timeseries",
+            "title": "Memoria por contenedor",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 28
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "{{name}}",
+                    "expr": "container_memory_working_set_bytes{name!=\"\"}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 13,
+            "type": "timeseries",
+            "title": "Red por contenedor (rx / tx)",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 36
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "rx {{name}}",
+                    "expr": "sum by (name) (rate(container_network_receive_bytes_total{name!=\"\"}[1m]))"
+                },
+                {
+                    "refId": "B",
+                    "legendFormat": "tx {{name}}",
+                    "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name!=\"\"}[1m]))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "id": 14,
+            "type": "timeseries",
+            "title": "Disco por contenedor (lectura / escritura)",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 36
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "legendFormat": "lectura {{name}}",
+                    "expr": "sum by (name) (rate(container_fs_reads_bytes_total{name!=\"\"}[1m]))"
+                },
+                {
+                    "refId": "B",
+                    "legendFormat": "escritura {{name}}",
+                    "expr": "sum by (name) (rate(container_fs_writes_bytes_total{name!=\"\"}[1m]))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps"
+                },
+                "overrides": []
+            }
+        }
+    ]
+}

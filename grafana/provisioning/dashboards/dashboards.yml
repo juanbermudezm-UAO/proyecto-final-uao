@@ -1,12 +1,12 @@
 apiVersion: 1
 
 providers:
-  - name: Infraestructura DevOps
+  - name: infra
     orgId: 1
-    folder: Proyecto Final DevOps
+    folder: Proyecto Final
     type: file
-    disableDeletion: false
-    updateIntervalSeconds: 10
+    disableDeletion: true
     allowUiUpdates: false
+    updateIntervalSeconds: 30
     options:
-      path: /etc/grafana/dashboards
+      path: /var/lib/grafana/dashboards
