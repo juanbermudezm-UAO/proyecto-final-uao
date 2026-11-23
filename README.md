@@ -30,7 +30,7 @@ Toda la infraestructura se define como código y se levanta con un solo comando,
 
 ## Arquitectura del Sistema
 
-![Diagrama de Arquitectura](./docs/arquitectura.png)
+![Diagrama de Arquitectura](./docs/capturas/arquitectura.png)
 
 ### Descripción
 - El cliente entra por Nginx (puerto 8080), que reparte las peticiones entre los tres backends.
